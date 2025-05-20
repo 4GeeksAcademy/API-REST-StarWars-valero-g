@@ -92,6 +92,50 @@ def get_characters_by_id(people_id):
         return {"message": f"Error when retrieving information of character {people_id}"}, 400
 
 
+# PUT de characters
+@app.route('/people/<int:people_id>', methods = ['PUT'])
+def put_character_by_id(people_id):
+    try:
+        body= request.get_json(silent = True)
+        print(body)
+        people = db.session.execute(select(Characters).where(Characters.id == people_id)).scalar_one_or_none()
+        # Validación de people_id
+        if people == None:
+            return {"message" : f"Character ID {people_id} cannot be found"}, 404  
+        # Validación del body
+        if "name" not in body.keys() or "age" not in body.keys():
+            return {"message" : f"Wrong request"}, 400 
+        # Update de la tabla
+        update_people = db.session.get(Characters, people_id) 
+        update_people.name = body["name"]
+        update_people.age = body["age"]
+        db.session.commit()
+        # Retornamos el personaje actualizado
+        people = db.session.execute(select(Characters).where(Characters.id == people_id)).scalar_one_or_none()
+        return people.serialize(),200
+
+    except Exception as e:
+        print("Error:", e)
+        return {"message": "Error updating character"}, 500
+    
+# DELETE de characters 
+@app.route('/people/<int:people_id>', methods = ['DELETE'])
+def delete_people_by_id(people_id):
+    try:
+        #people = db.session.execute(select(Characters).where(Characters.id == people_id)).scalar_one_or_none()
+        character = db.session.get(Characters, people_id)
+        # Validación de people_id
+        if character == None:
+            return {"message" : f"Character ID {people_id} cannot be found"}, 404   
+        db.session.delete(character)
+        db.session.commit()
+        return {"message": f"Character {people_id} deleted"}
+
+    except Exception as e:
+        print("Error:", e)
+        return {"message": "Error deleting character"}, 500
+    
+
 # GET de PLANETS
 @app.route('/planets', methods= ['GET'])
 def get_planets():
@@ -105,6 +149,7 @@ def get_planets():
         return jsonify(all_planets), 200
     except:
         return {"message":"Error: planets cannot be found"}, 404
+    
 
 @app.route('/planets/<int:planets_id>', methods = ['GET'])
 def get_planets_by_id(planets_id):
@@ -117,68 +162,76 @@ def get_planets_by_id(planets_id):
         return jsonify(planet.serialize()), 200
     except:
         return {"message": f"Error when retrieving information of planet {planets_id}"}, 400
+    
+
+# PUT de Planets
+@app.route('/planet/<int:planet_id>', methods = ['PUT'])
+def put_planet_by_id(planet_id):
+    try:
+        body= request.get_json(silent = True)
+        planet = db.session.execute(select(Planets).where(Planets.id == planet_id)).scalar_one_or_none()
+        # Validación de planet_id
+        if planet == None:
+            return {"message" : f"Planet ID {planet_id} cannot be found"}, 404  
+        # Validación del body
+        if "name" not in body.keys() or "size" not in body.keys() or "gravity" not in body.keys():
+            return {"message" : f"Wrong request"}, 400 
+        # Update de la tabla
+        update_planet = db.session.get(Planets, planet_id) 
+        update_planet.name = body["name"]
+        update_planet.size = body["size"]
+        update_planet.gravity = body["gravity"]
+        db.session.commit()
+        # Retornamos el planeta actualizado
+        planet = db.session.execute(select(Planets).where(Planets.id == planet_id)).scalar_one_or_none()
+        return planet.serialize(),200
+
+    except Exception as e:
+        print("Error:", e)
+        return {"message": "Error updating planet"}, 500
+    
+# DELETE de planets 
+@app.route('/planet/<int:planet_id>', methods = ['DELETE'])
+def delete_planet_by_id(planet_id):
+    try:
+        #people = db.session.execute(select(Characters).where(Characters.id == people_id)).scalar_one_or_none()
+        planet = db.session.get(Planets, planet_id)
+        # Validación de people_id
+        if planet == None:
+            return {"message" : f"Character ID {planet_id} cannot be found"}, 404   
+        db.session.delete(planet)
+        db.session.commit()
+        return {"message": f"Planet {planet_id} deleted"}
+
+    except Exception as e:
+        print("Error:", e)
+        return {"message": "Error deleting planet"}, 500
+
+
+
 
 
 # GET de favourites
-@app.route('/users/favorites', methods = ['GET'])
-def get_favorites():
-    try:
-        result = db.session.execute(select(favoritos))
-        all_favorites = result.fetchall()
-
-        if not all_favorites:
-            return {"message": "No favorites added yet"}, 404
-
-        # Convertir cada fila a dict manualmente
-        favorites_list = []
-        for row in all_favorites:
-            if row.character_id is None:
-                favorites_list.append({
-                    "id": row.id,
-                    "user_id": row.user_id,
-                    "planet_id": row.planet_id,
-                })
-            elif row.planet_id is None:
-                favorites_list.append({
-                    "id": row.id,
-                    "user_id": row.user_id,
-                    "people_id": row.character_id,
-                })                
-        return jsonify(favorites_list), 200
-    except Exception as e:
-        print("Error:", e)
-        return {"message": "Error retrieving favorites"}, 500
-
-@app.route('/users/favorites/<int:id_user>', methods = ['GET'])
+@app.route('/users/<int:id_user>/favorites', methods = ['GET'])
 def get_favorites_by_id(id_user):
     try:
         # Validar la existencia de usuario
         user =  db.session.execute(select(User).where(User.id == id_user)).scalar_one_or_none()
         if user is None:
             return {"message":f"User {id_user} cannot be found"}, 404
-        # Buscar favoritos del usuario
-        result = db.session.execute(select(favoritos).where(favoritos.c.user_id == id_user))
-        all_favorites = result.fetchall()
+        favorite_planets = []
+        favorite_characters = []
+        # Buscar planetas favoritos del usuario y los añadimos al arreglo de planetas favoritos
+        for favorite_planet in user.favourites_planet:
+            if favorite_planet is not None: #TBC, mejor imprimir y ver qué devuelve
+                favorite_planets.append(favorite_planet.serialize())
 
-        if not all_favorites:
-            return {"message": f"No favorites added yet for user {id_user}"}, 404
+        # Buscar personajes favoritos del usuario y los añadimos al arreglo de personajes favoritos
+        for favorite_character in user.favourites_character:
+            if favorite_character is not None:
+                favorite_characters.append(favorite_character.serialize())
 
-        # Convertir cada fila a dict manualmente
-        favorites_list = []
-        for row in all_favorites:
-            if row.character_id is None:
-                favorites_list.append({
-                    "id": row.id,
-                    "user_id": row.user_id,
-                    "planet_id": row.planet_id,
-                })
-            elif row.planet_id is None:
-                favorites_list.append({
-                    "id": row.id,
-                    "user_id": row.user_id,
-                    "people_id": row.character_id,
-                })                
-        return jsonify(favorites_list), 200
+        return {"User_id":id_user,"favourite_planets": favorite_planets, "favorite_people": favorite_characters }, 200
     except Exception as e:
         print("Error:", e)
         return {"message": "Error retrieving favorites"}, 500
@@ -211,7 +264,6 @@ def add_favorite_planet(planet_id):
         if test_favorite_planet != None:
             return {"message": f"Planet {planet_id} is already a favorite planet of user {request_body["user_id"]}"}, 400
         # Agregamos favorito (favoritos es tabla, no clase)
-        print("a")
         #db.session.execute(favoritos.insert().values(user_id=request_body["user_id"], planet_id=planet_id, character_id=None))
         stmt = favoritos.insert().values(user_id=request_body["user_id"],planet_id=planet_id,character_id=None)
         db.session.execute(stmt)
@@ -232,7 +284,6 @@ def add_favorite_people(people_id):
             return {"message": "Wrong request"}, 400
         # Validación de la existencia de User ID
         user = db.session.execute(select(User).where(User.id == request_body["user_id"])).scalar_one_or_none()
-
         if user is None:
             return {"message": "User cannot be found"}, 404
         # Validación de la existencia de Personaje
